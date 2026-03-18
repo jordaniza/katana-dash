@@ -13,6 +13,8 @@ Supporting context is also shown from:
 - `AvKATVault.totalAssets()`
 - `AvKATVault.masterTokenId()`
 - `AvKATVault.strategy()`
+- cumulative exit fees from `DynamicExitQueue.Exit(tokenId, fee)` logs
+- current unwithdrawn exit fees from `KAT.balanceOf(exitQueue)`
 - `VotingEscrow.token()`
 - `VotingEscrow.lockNFT()`
 - `VotingEscrow.currentExitingAmount()`
@@ -23,6 +25,7 @@ The dashboard also stores cumulative counters for:
 
 - vKAT create-lock events
 - avKAT deposit events
+- exit fees collected
 
 ## Run
 

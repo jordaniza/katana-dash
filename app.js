@@ -44,6 +44,8 @@ const dom = {
   avKatMintedDetail: document.getElementById("avKatMintedDetail"),
   vaultAssetsValue: document.getElementById("vaultAssetsValue"),
   externalLockedValue: document.getElementById("externalLockedValue"),
+  exitFeesCollectedValue: document.getElementById("exitFeesCollectedValue"),
+  exitQueueFeeBalanceValue: document.getElementById("exitQueueFeeBalanceValue"),
   sharePriceValue: document.getElementById("sharePriceValue"),
   masterTokenValue: document.getElementById("masterTokenValue"),
   chainIdValue: document.getElementById("chainIdValue"),
@@ -59,10 +61,16 @@ const dom = {
   katOverviewChart: document.getElementById("katOverviewChart"),
   katOverviewLegend: document.getElementById("katOverviewLegend"),
   katOverviewSummary: document.getElementById("katOverviewSummary"),
+  vaultAssetsChart: document.getElementById("vaultAssetsChart"),
+  totalLockedChart: document.getElementById("totalLockedChart"),
+  externalLockedChart: document.getElementById("externalLockedChart"),
   avKatSupplyChart: document.getElementById("avKatSupplyChart"),
   vkatCreateCountChart: document.getElementById("vkatCreateCountChart"),
   avkatDepositCountChart: document.getElementById("avkatDepositCountChart"),
   exitQueueChart: document.getElementById("exitQueueChart"),
+  vaultAssetsChartValue: document.getElementById("vaultAssetsChartValue"),
+  totalLockedChartValue: document.getElementById("totalLockedChartValue"),
+  externalLockedChartValue: document.getElementById("externalLockedChartValue"),
   avKatSupplyChartValue: document.getElementById("avKatSupplyChartValue"),
   vkatCreateCountChartValue: document.getElementById("vkatCreateCountChartValue"),
   avkatDepositCountChartValue: document.getElementById("avkatDepositCountChartValue"),
@@ -70,6 +78,39 @@ const dom = {
 };
 
 const CHARTS = [
+  {
+    name: "Vault-backed KAT",
+    container: dom.vaultAssetsChart,
+    valueElement: dom.vaultAssetsChartValue,
+    color: "#0550db",
+    valueFor: (snapshot) => toBigInt(snapshot.vaultAssets),
+    numericFor: (snapshot) => toTokenNumber(snapshot.vaultAssets, snapshot.decimals),
+    latestLabelFor: (snapshot) => `${formatTokenDisplay(snapshot.vaultAssets, snapshot.decimals)} KAT`,
+    peakLabelFor: (snapshot) => `${formatTokenDisplay(snapshot.vaultAssets, snapshot.decimals)} peak`,
+    tooltipValueFor: (snapshot) => `${formatTokenDetail(snapshot.vaultAssets, snapshot.decimals)} KAT`,
+  },
+  {
+    name: "Total locked KAT",
+    container: dom.totalLockedChart,
+    valueElement: dom.totalLockedChartValue,
+    color: "#9ca800",
+    valueFor: (snapshot) => toBigInt(snapshot.totalLocked),
+    numericFor: (snapshot) => toTokenNumber(snapshot.totalLocked, snapshot.decimals),
+    latestLabelFor: (snapshot) => `${formatTokenDisplay(snapshot.totalLocked, snapshot.decimals)} KAT`,
+    peakLabelFor: (snapshot) => `${formatTokenDisplay(snapshot.totalLocked, snapshot.decimals)} peak`,
+    tooltipValueFor: (snapshot) => `${formatTokenDetail(snapshot.totalLocked, snapshot.decimals)} KAT`,
+  },
+  {
+    name: "KAT in vKAT",
+    container: dom.externalLockedChart,
+    valueElement: dom.externalLockedChartValue,
+    color: "#4d504d",
+    valueFor: (snapshot) => toBigInt(snapshot.externalLocked),
+    numericFor: (snapshot) => toTokenNumber(snapshot.externalLocked, snapshot.decimals),
+    latestLabelFor: (snapshot) => `${formatTokenDisplay(snapshot.externalLocked, snapshot.decimals)} KAT`,
+    peakLabelFor: (snapshot) => `${formatTokenDisplay(snapshot.externalLocked, snapshot.decimals)} peak`,
+    tooltipValueFor: (snapshot) => `${formatTokenDetail(snapshot.externalLocked, snapshot.decimals)} KAT`,
+  },
   {
     name: "Total avKAT",
     container: dom.avKatSupplyChart,
@@ -135,7 +176,7 @@ const KAT_OVERVIEW_SERIES = [
   },
   {
     key: "externalLocked",
-    label: "KAT outside avKAT",
+    label: "KAT in vKAT",
     color: "#4d504d",
     valueFor: (snapshot) => toBigInt(snapshot.externalLocked),
     numericFor: (snapshot) => toTokenNumber(snapshot.externalLocked, snapshot.decimals),
@@ -215,6 +256,8 @@ function renderDashboard(payload, historySnapshots) {
 
   updateText(dom.vaultAssetsValue, `${formatTokenDetail(vaultAssets, decimals)} KAT`);
   updateText(dom.externalLockedValue, `${formatTokenDetail(externalLocked, decimals)} KAT`);
+  updateText(dom.exitFeesCollectedValue, `${formatTokenDetail(snapshot.exitFeesCollected, decimals)} KAT`);
+  updateText(dom.exitQueueFeeBalanceValue, `${formatTokenDetail(snapshot.exitQueueFeeBalance, decimals)} KAT`);
   updateText(dom.sharePriceValue, snapshot.sharePrice ? `${snapshot.sharePrice} KAT / avKAT` : "No shares minted");
   updateText(dom.masterTokenValue, `#${formatInteger(snapshot.masterTokenId)}`);
 

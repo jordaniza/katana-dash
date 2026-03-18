@@ -41,6 +41,7 @@ SELECTORS = {
     "strategy": "0xa8c62e76",
     "decimals": "0x313ce567",
     "token": "0xfc0c546a",
+    "balanceOf": "0x70a08231",
     "currentExitingAmount": "0xbbd25c16",
     "ticketHolder": "0xafacc3a8",
 }
@@ -48,6 +49,7 @@ SELECTORS = {
 TOPICS = {
     "vkatCreateLock": "0x7162984403f6c73c8639375d45a9187dfd04602231bd8e587c415718b5f7e5f9",
     "avkatDeposit": "0xdcbc1c05240f31ff3ad067ef1ee35ce4997762752e3a095284754544f4c709d7",
+    "exit": "0xc169549703555b9f5b8566740640a87ab6e0846b684e995beb625427c8d417c6",
     "transfer": "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef",
 }
 
@@ -150,8 +152,10 @@ def initialize_db() -> None:
                 avkat_supply TEXT NOT NULL,
                 vault_assets TEXT NOT NULL,
                 current_exiting_amount TEXT NOT NULL DEFAULT '0',
+                exit_queue_fee_balance TEXT NOT NULL DEFAULT '0',
                 vkat_create_lock_count INTEGER NOT NULL DEFAULT 0,
                 avkat_deposit_count INTEGER NOT NULL DEFAULT 0,
+                exit_fee_total TEXT NOT NULL DEFAULT '0',
                 queued_token_ids INTEGER NOT NULL DEFAULT 0,
                 unique_holder_count INTEGER NOT NULL DEFAULT 0,
                 master_token_id INTEGER NOT NULL,
@@ -162,8 +166,10 @@ def initialize_db() -> None:
             """
         )
         ensure_snapshot_column(connection, "current_exiting_amount", "TEXT NOT NULL DEFAULT '0'")
+        ensure_snapshot_column(connection, "exit_queue_fee_balance", "TEXT NOT NULL DEFAULT '0'")
         ensure_snapshot_column(connection, "vkat_create_lock_count", "INTEGER NOT NULL DEFAULT 0")
         ensure_snapshot_column(connection, "avkat_deposit_count", "INTEGER NOT NULL DEFAULT 0")
+        ensure_snapshot_column(connection, "exit_fee_total", "TEXT NOT NULL DEFAULT '0'")
         ensure_snapshot_column(connection, "queued_token_ids", "INTEGER NOT NULL DEFAULT 0")
         ensure_snapshot_column(connection, "unique_holder_count", "INTEGER NOT NULL DEFAULT 0")
         connection.execute(
@@ -175,14 +181,16 @@ def initialize_db() -> None:
                 id INTEGER PRIMARY KEY CHECK (id = 1),
                 last_synced_block INTEGER NOT NULL,
                 vkat_create_lock_count INTEGER NOT NULL,
-                avkat_deposit_count INTEGER NOT NULL
+                avkat_deposit_count INTEGER NOT NULL,
+                exit_fee_total TEXT NOT NULL DEFAULT '0'
             )
             """
         )
+        sync_exit_fee_added = ensure_table_column(connection, "sync_state", "exit_fee_total", "TEXT NOT NULL DEFAULT '0'")
         connection.execute(
             """
-            INSERT INTO sync_state (id, last_synced_block, vkat_create_lock_count, avkat_deposit_count)
-            VALUES (1, -1, 0, 0)
+            INSERT INTO sync_state (id, last_synced_block, vkat_create_lock_count, avkat_deposit_count, exit_fee_total)
+            VALUES (1, -1, 0, 0, '0')
             ON CONFLICT(id) DO NOTHING
             """
         )
@@ -202,11 +210,11 @@ def initialize_db() -> None:
         owner_count = int(owner_count_row[0]) if owner_count_row is not None else 0
         last_synced_block = int(sync_state_row[0]) if sync_state_row is not None else -1
 
-        if owner_count == 0 and last_synced_block >= 0:
+        if sync_exit_fee_added or (owner_count == 0 and last_synced_block >= 0):
             connection.execute(
                 """
                 UPDATE sync_state
-                SET last_synced_block = -1, vkat_create_lock_count = 0, avkat_deposit_count = 0
+                SET last_synced_block = -1, vkat_create_lock_count = 0, avkat_deposit_count = 0, exit_fee_total = '0'
                 WHERE id = 1
                 """
             )
@@ -214,11 +222,22 @@ def initialize_db() -> None:
 
 
 def ensure_snapshot_column(connection: sqlite3.Connection, name: str, definition: str) -> None:
+    ensure_table_column(connection, "snapshots", name, definition)
+
+
+def ensure_table_column(
+    connection: sqlite3.Connection,
+    table_name: str,
+    column_name: str,
+    definition: str,
+) -> bool:
     try:
-        connection.execute(f"ALTER TABLE snapshots ADD COLUMN {name} {definition}")
+        connection.execute(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {definition}")
     except sqlite3.OperationalError as error:
         if "duplicate column name" not in str(error).lower():
             raise
+        return False
+    return True
 
 
 def get_stats_payload(force_refresh: bool) -> dict[str, Any]:
@@ -271,6 +290,10 @@ def fetch_latest_snapshot() -> dict[str, Any]:
             eth_call(CONTRACTS["votingEscrow"], SELECTORS["currentExitingAmount"]),
         ]
     )
+    kat_token_address = hex_to_address(responses[10])
+    exit_queue_balance = rpc_batch(
+        [eth_call_address(kat_token_address, SELECTORS["balanceOf"], CONTRACTS["exitQueue"])]
+    )[0]
 
     return {
         "recorded_at": utc_now_iso(),
@@ -282,9 +305,10 @@ def fetch_latest_snapshot() -> dict[str, Any]:
         "avkat_supply": str(hex_to_int(responses[5])),
         "vault_assets": str(hex_to_int(responses[6])),
         "current_exiting_amount": str(hex_to_int(responses[11])),
+        "exit_queue_fee_balance": str(hex_to_int(exit_queue_balance)),
         "master_token_id": hex_to_int(responses[7]),
         "strategy_address": hex_to_address(responses[8]),
-        "kat_token_address": hex_to_address(responses[10]),
+        "kat_token_address": kat_token_address,
         "lock_nft_address": hex_to_address(responses[3]),
     }
 
@@ -328,6 +352,11 @@ def eth_call_uint256(to: str, selector: str, value: int) -> dict[str, Any]:
     return eth_call(to, f"{selector}{encoded_value}")
 
 
+def eth_call_address(to: str, selector: str, address: str) -> dict[str, Any]:
+    encoded_address = address.lower().removeprefix("0x").rjust(64, "0")
+    return eth_call(to, f"{selector}{encoded_address}")
+
+
 def get_logs(address: str, topic: str, from_block: int, to_block: int) -> dict[str, Any]:
     return {
         "method": "eth_getLogs",
@@ -368,15 +397,17 @@ def write_snapshot(snapshot: dict[str, Any]) -> None:
                 avkat_supply,
                 vault_assets,
                 current_exiting_amount,
+                exit_queue_fee_balance,
                 vkat_create_lock_count,
                 avkat_deposit_count,
+                exit_fee_total,
                 queued_token_ids,
                 unique_holder_count,
                 master_token_id,
                 strategy_address,
                 kat_token_address,
                 lock_nft_address
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 snapshot["recorded_at"],
@@ -388,8 +419,10 @@ def write_snapshot(snapshot: dict[str, Any]) -> None:
                 snapshot["avkat_supply"],
                 snapshot["vault_assets"],
                 snapshot["current_exiting_amount"],
+                snapshot["exit_queue_fee_balance"],
                 snapshot["vkat_create_lock_count"],
                 snapshot["avkat_deposit_count"],
+                snapshot["exit_fee_total"],
                 snapshot["queued_token_ids"],
                 snapshot["unique_holder_count"],
                 snapshot["master_token_id"],
@@ -416,8 +449,10 @@ def read_latest_snapshot() -> dict[str, Any] | None:
                 avkat_supply,
                 vault_assets,
                 current_exiting_amount,
+                exit_queue_fee_balance,
                 vkat_create_lock_count,
                 avkat_deposit_count,
+                exit_fee_total,
                 queued_token_ids,
                 unique_holder_count,
                 master_token_id,
@@ -448,8 +483,10 @@ def read_snapshot_history(limit: int) -> list[dict[str, Any]]:
                 avkat_supply,
                 vault_assets,
                 current_exiting_amount,
+                exit_queue_fee_balance,
                 vkat_create_lock_count,
                 avkat_deposit_count,
+                exit_fee_total,
                 queued_token_ids,
                 unique_holder_count,
                 master_token_id,
@@ -473,47 +510,60 @@ def count_snapshots() -> int:
     return int(row[0]) if row is not None else 0
 
 
-def read_sync_state() -> dict[str, int]:
+def read_sync_state() -> dict[str, Any]:
     with sqlite3.connect(DB_PATH) as connection:
         connection.row_factory = sqlite3.Row
         row = connection.execute(
             """
-            SELECT last_synced_block, vkat_create_lock_count, avkat_deposit_count
+            SELECT last_synced_block, vkat_create_lock_count, avkat_deposit_count, exit_fee_total
             FROM sync_state
             WHERE id = 1
             """
         ).fetchone()
 
     if row is None:
-        return {"last_synced_block": -1, "vkat_create_lock_count": 0, "avkat_deposit_count": 0}
+        return {
+            "last_synced_block": -1,
+            "vkat_create_lock_count": 0,
+            "avkat_deposit_count": 0,
+            "exit_fee_total": "0",
+        }
 
     return dict(row)
 
 
-def write_sync_state(state: dict[str, int]) -> None:
+def write_sync_state(state: dict[str, Any]) -> None:
     with sqlite3.connect(DB_PATH) as connection:
         connection.execute(
             """
             UPDATE sync_state
-            SET last_synced_block = ?, vkat_create_lock_count = ?, avkat_deposit_count = ?
+            SET last_synced_block = ?, vkat_create_lock_count = ?, avkat_deposit_count = ?, exit_fee_total = ?
             WHERE id = 1
             """,
             (
                 state["last_synced_block"],
                 state["vkat_create_lock_count"],
                 state["avkat_deposit_count"],
+                state["exit_fee_total"],
             ),
         )
         connection.commit()
 
 
-def sync_chain_state(target_block: int) -> dict[str, int]:
+def sync_chain_state(target_block: int) -> dict[str, Any]:
     state = read_sync_state()
+    exit_fee_total = int(state["exit_fee_total"])
+
+    if exit_fee_total == 0 and state["last_synced_block"] >= 0:
+        exit_fee_total = backfill_exit_fees(state["last_synced_block"])
+        state["exit_fee_total"] = str(exit_fee_total)
+        write_sync_state(state)
 
     if state["last_synced_block"] >= target_block:
         return {
             "vkat_create_lock_count": state["vkat_create_lock_count"],
             "avkat_deposit_count": state["avkat_deposit_count"],
+            "exit_fee_total": state["exit_fee_total"],
         }
 
     next_block = max(state["last_synced_block"] + 1, 0)
@@ -524,21 +574,25 @@ def sync_chain_state(target_block: int) -> dict[str, int]:
             [
                 get_logs(CONTRACTS["votingEscrow"], TOPICS["vkatCreateLock"], next_block, end_block),
                 get_logs(CONTRACTS["vault"], TOPICS["avkatDeposit"], next_block, end_block),
+                get_logs(CONTRACTS["exitQueue"], TOPICS["exit"], next_block, end_block),
                 get_logs(CONTRACTS["lockNft"], TOPICS["transfer"], next_block, end_block),
             ]
         )
 
         state["vkat_create_lock_count"] += len(responses[0])
         state["avkat_deposit_count"] += len(responses[1])
-        apply_lock_transfer_logs(responses[2])
+        exit_fee_total += sum_exit_fees(responses[2])
+        apply_lock_transfer_logs(responses[3])
         next_block = end_block + 1
 
     state["last_synced_block"] = target_block
+    state["exit_fee_total"] = str(exit_fee_total)
     write_sync_state(state)
 
     return {
         "vkat_create_lock_count": state["vkat_create_lock_count"],
         "avkat_deposit_count": state["avkat_deposit_count"],
+        "exit_fee_total": state["exit_fee_total"],
     }
 
 
@@ -571,6 +625,23 @@ def apply_lock_transfer_logs(logs: list[dict[str, Any]]) -> None:
         connection.commit()
 
 
+def sum_exit_fees(logs: list[dict[str, Any]]) -> int:
+    return sum(hex_to_int(entry["data"]) for entry in logs if entry.get("data") not in (None, "0x"))
+
+
+def backfill_exit_fees(target_block: int) -> int:
+    total = 0
+    next_block = 0
+
+    while next_block <= target_block:
+        end_block = min(next_block + LOG_CHUNK_SIZE - 1, target_block)
+        response = rpc_batch([get_logs(CONTRACTS["exitQueue"], TOPICS["exit"], next_block, end_block)])
+        total += sum_exit_fees(response[0])
+        next_block = end_block + 1
+
+    return total
+
+
 def compute_holder_metrics() -> dict[str, int]:
     with sqlite3.connect(DB_PATH) as connection:
         rows = connection.execute(
@@ -583,18 +654,11 @@ def compute_holder_metrics() -> dict[str, int]:
         for token_id, owner_address in rows
         if owner_address.lower() == queue_holder_address
     ]
-    holder_addresses = {
-        owner_address.lower()
-        for _, owner_address in rows
-        if owner_address.lower() != queue_holder_address
-    }
-
-    if queued_token_ids:
-        holder_addresses.update(fetch_ticket_holders(queued_token_ids))
+    queue_wallets = fetch_ticket_holders(queued_token_ids) if queued_token_ids else set()
 
     return {
         "queued_token_ids": len(queued_token_ids),
-        "unique_holder_count": len(holder_addresses),
+        "unique_holder_count": len(queue_wallets),
     }
 
 
@@ -625,10 +689,12 @@ def enrich_snapshot(snapshot: dict[str, Any]) -> dict[str, Any]:
         "avKatSupply": snapshot["avkat_supply"],
         "vaultAssets": snapshot["vault_assets"],
         "currentExitingAmount": snapshot["current_exiting_amount"],
+        "exitQueueFeeBalance": snapshot["exit_queue_fee_balance"],
         "externalLocked": str(external_locked),
         "sharePrice": format_ratio(vault_assets, avkat_supply, 6) if avkat_supply > 0 else None,
         "vkatCreateLockCount": snapshot["vkat_create_lock_count"],
         "avkatDepositCount": snapshot["avkat_deposit_count"],
+        "exitFeesCollected": snapshot["exit_fee_total"],
         "queuedTokenIds": snapshot["queued_token_ids"],
         "uniqueHolderCount": snapshot["unique_holder_count"],
         "masterTokenId": snapshot["master_token_id"],

@@ -118,8 +118,16 @@ python3 -m http.server 8787</code></pre>
               <dd id="vaultAssetsValue">--</dd>
             </div>
             <div>
-              <dt>KAT outside avKAT vault</dt>
+              <dt>KAT in vKAT</dt>
               <dd id="externalLockedValue">--</dd>
+            </div>
+            <div>
+              <dt>Exit fees collected</dt>
+              <dd id="exitFeesCollectedValue">--</dd>
+            </div>
+            <div>
+              <dt>Exit queue KAT balance</dt>
+              <dd id="exitQueueFeeBalanceValue">--</dd>
             </div>
             <div>
               <dt>KAT per avKAT</dt>
@@ -155,7 +163,7 @@ python3 -m http.server 8787</code></pre>
               <dd id="queuedTokenIdsValue">--</dd>
             </div>
             <div>
-              <dt>Unique holders</dt>
+              <dt>Exit queue wallets</dt>
               <dd id="uniqueHolderCountValue">--</dd>
             </div>
             <div>
@@ -176,27 +184,90 @@ python3 -m http.server 8787</code></pre>
           <p>History is exported into static JSON during the build step and served directly from the site bundle.</p>
         </div>
 
+        <article class="chart-card chart-card-hero">
+          <div class="chart-card-header">
+            <div>
+              <p class="chart-kicker">Overlaid KAT positions</p>
+              <div class="chart-title-row">
+                <h3>KAT position overlay</h3>
+                <button
+                  class="tooltip-trigger"
+                  type="button"
+                  data-tooltip="Compares the three KAT-denominated position series over time. Use the toggle chips to turn each line on or off."
+                  aria-label="Explain KAT position overlay chart"
+                >
+                  ?
+                </button>
+              </div>
+            </div>
+            <p class="chart-current" id="katOverviewSummary">--</p>
+          </div>
+          <div class="chart-toggle-group" id="katOverviewLegend" aria-label="Toggle KAT series"></div>
+          <div class="chart-shell" id="katOverviewChart"></div>
+        </article>
+
         <div class="chart-grid chart-grid-wide">
           <article class="chart-card">
             <div class="chart-card-header">
               <div>
-                <p class="chart-kicker">Overlaid KAT positions</p>
+                <p class="chart-kicker">KAT in avKAT</p>
                 <div class="chart-title-row">
-                  <h3>KAT position overlay</h3>
+                  <h3>Vault-backed KAT</h3>
                   <button
                     class="tooltip-trigger"
                     type="button"
-                    data-tooltip="Compares the three KAT-denominated position series over time. Use the toggle chips to turn each line on or off."
-                    aria-label="Explain KAT position overlay chart"
+                    data-tooltip="Historical snapshots of AvKATVault.totalAssets(), representing the KAT currently backing avKAT shares."
+                    aria-label="Explain vault-backed KAT chart"
                   >
                     ?
                   </button>
                 </div>
               </div>
-              <p class="chart-current" id="katOverviewSummary">--</p>
+              <p class="chart-current" id="vaultAssetsChartValue">--</p>
             </div>
-            <div class="chart-toggle-group" id="katOverviewLegend" aria-label="Toggle KAT series"></div>
-            <div class="chart-shell" id="katOverviewChart"></div>
+            <div class="chart-shell" id="vaultAssetsChart"></div>
+          </article>
+
+          <article class="chart-card">
+            <div class="chart-card-header">
+              <div>
+                <p class="chart-kicker">All positions</p>
+                <div class="chart-title-row">
+                  <h3>Total locked KAT</h3>
+                  <button
+                    class="tooltip-trigger"
+                    type="button"
+                    data-tooltip="Historical snapshots of VotingEscrow.totalLocked(), including avKAT’s master token and all other escrowed KAT."
+                    aria-label="Explain total locked KAT chart"
+                  >
+                    ?
+                  </button>
+                </div>
+              </div>
+              <p class="chart-current" id="totalLockedChartValue">--</p>
+            </div>
+            <div class="chart-shell" id="totalLockedChart"></div>
+          </article>
+
+          <article class="chart-card">
+            <div class="chart-card-header">
+              <div>
+                <p class="chart-kicker">Direct ve positions</p>
+                <div class="chart-title-row">
+                  <h3>KAT in vKAT</h3>
+                  <button
+                    class="tooltip-trigger"
+                    type="button"
+                    data-tooltip="Historical snapshots of total locked KAT minus the KAT backing avKAT, isolating direct vKAT positions."
+                    aria-label="Explain KAT in vKAT chart"
+                  >
+                    ?
+                  </button>
+                </div>
+              </div>
+              <p class="chart-current" id="externalLockedChartValue">--</p>
+            </div>
+            <div class="chart-shell" id="externalLockedChart"></div>
           </article>
 
           <article class="chart-card">
@@ -313,6 +384,16 @@ python3 -m http.server 8787</code></pre>
               </a>
             </div>
             <div class="contract-row">
+              <span class="contract-label">Dynamic Exit Queue</span>
+              <a
+                href="https://katanascan.com/address/0x6dE9cAAb658C744aD337Ca5d92D084c97ffF578d"
+                target="_blank"
+                rel="noreferrer"
+              >
+                0x6dE9...578d
+              </a>
+            </div>
+            <div class="contract-row">
               <span class="contract-label">NFT Lock</span>
               <a
                 id="lockNftLink"
@@ -355,8 +436,10 @@ python3 -m http.server 8787</code></pre>
             <li><strong>Active vKAT NFTs</strong> reads <code>Lock.totalSupply()</code>.</li>
             <li><strong>avKAT minted</strong> reads <code>AvKATVault.totalSupply()</code>.</li>
             <li><strong>Vault-backed KAT</strong> reads <code>AvKATVault.totalAssets()</code>.</li>
+            <li><strong>Exit fees collected</strong> sums the <code>fee</code> field from <code>DynamicExitQueue.Exit(tokenId, fee)</code> logs.</li>
+            <li><strong>Exit queue KAT balance</strong> reads <code>KAT.balanceOf(exitQueue)</code> for the queue contract’s live KAT balance.</li>
             <li><strong>Queued tokenIds</strong> counts active lock NFTs currently held by VotingEscrow while waiting in the exit queue.</li>
-            <li><strong>Unique holders</strong> counts current holder addresses, attributing queued positions back to their queue ticket holder.</li>
+            <li><strong>Exit queue wallets</strong> counts distinct queue ticket-holder addresses currently represented in the exit queue.</li>
           </ul>
           <p class="footnote" id="integrityNote">
             Integrity check pending: validating the escrow's reported lock NFT against the expected

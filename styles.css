@@ -502,6 +502,15 @@ pre,
   background: linear-gradient(90deg, rgba(11, 13, 13, 0), var(--chart-accent), rgba(11, 13, 13, 0));
 }
 
+.chart-card-hero {
+  margin-bottom: 18px;
+  padding: 22px 22px 20px;
+}
+
+.chart-card-hero .chart-interactive {
+  aspect-ratio: 16 / 5;
+}
+
 .chart-card-header {
   display: flex;
   align-items: flex-start;
