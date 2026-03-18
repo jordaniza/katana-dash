@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Katana KAT Launch Dashboard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="page-shell">
+      <header class="hero panel">
+        <div class="hero-copy">
+          <p class="eyebrow">Aragon x Katana</p>
+          <p class="hero-banner">Deep Liquidity. Better Execution.</p>
+          <h1>KAT Launch Operations Dashboard</h1>
+          <p class="hero-text">
+            Static public deployment of the Katana governance dashboard, built from exported
+            on-chain snapshots and ready for any CDN or static hosting platform.
+          </p>
+        </div>
+
+        <div class="hero-actions">
+          <div class="status-pill" id="statusPill" aria-live="polite">
+            <span class="status-dot"></span>
+            <span id="statusText">Loading exported Katana snapshot...</span>
+          </div>
+          <button class="refresh-button" id="refreshButton" type="button">Reload data</button>
+        </div>
+      </header>
+
+      <section class="warning panel" id="serveWarning" hidden>
+        <h2>Serve the static bundle over HTTP</h2>
+        <p>
+          This version reads from exported JSON files. Serve it with any static host or a local web
+          server instead of opening <code>file://</code> directly.
+        </p>
+        <pre><code>cd /home/jordan/Documents/dev/crypto/aragon/katana-dash/static
+python3 -m http.server 8787</code></pre>
+      </section>
+
+      <section class="metrics-grid">
+        <article class="metric-card panel panel-amber">
+          <div class="metric-meta">
+            <span class="metric-kicker">Voting Escrow</span>
+            <span class="metric-method">totalLocked()</span>
+          </div>
+          <div class="metric-title-row">
+            <h2>Total KAT in escrow</h2>
+            <button
+              class="tooltip-trigger"
+              type="button"
+              data-tooltip="Reads VotingEscrow.totalLocked() to show the total amount of KAT currently locked across all vKAT positions."
+              aria-label="Explain total KAT in escrow"
+            >
+              ?
+            </button>
+          </div>
+          <p class="metric-value" id="totalLockedValue">--</p>
+          <p class="metric-detail" id="totalLockedDetail">Loading live escrow balance...</p>
+        </article>
+
+        <article class="metric-card panel panel-cream">
+          <div class="metric-meta">
+            <span class="metric-kicker">Lock NFT</span>
+            <span class="metric-method">totalSupply()</span>
+          </div>
+          <div class="metric-title-row">
+            <h2>Active vKAT NFTs</h2>
+            <button
+              class="tooltip-trigger"
+              type="button"
+              data-tooltip="Reads Lock.totalSupply() to count outstanding veNFT positions that currently exist on Katana."
+              aria-label="Explain active vKAT NFTs"
+            >
+              ?
+            </button>
+          </div>
+          <p class="metric-value" id="activeNftsValue">--</p>
+          <p class="metric-detail" id="activeNftsDetail">Loading current outstanding veNFT count...</p>
+        </article>
+
+        <article class="metric-card panel panel-rust">
+          <div class="metric-meta">
+            <span class="metric-kicker">AvKAT Vault</span>
+            <span class="metric-method">totalSupply()</span>
+          </div>
+          <div class="metric-title-row">
+            <h2>avKAT minted</h2>
+            <button
+              class="tooltip-trigger"
+              type="button"
+              data-tooltip="Reads AvKATVault.totalSupply() to show total outstanding avKAT shares that have been minted."
+              aria-label="Explain avKAT minted"
+            >
+              ?
+            </button>
+          </div>
+          <p class="metric-value" id="avKatMintedValue">--</p>
+          <p class="metric-detail" id="avKatMintedDetail">Loading live avKAT share supply...</p>
+        </article>
+      </section>
+
+      <section class="context-grid">
+        <article class="panel context-card">
+          <div class="context-heading">
+            <h2>Vault context</h2>
+            <span class="context-note">Derived from live state</span>
+          </div>
+          <dl class="data-list">
+            <div>
+              <dt>Vault-backed KAT</dt>
+              <dd id="vaultAssetsValue">--</dd>
+            </div>
+            <div>
+              <dt>KAT outside avKAT vault</dt>
+              <dd id="externalLockedValue">--</dd>
+            </div>
+            <div>
+              <dt>KAT per avKAT</dt>
+              <dd id="sharePriceValue">--</dd>
+            </div>
+            <div>
+              <dt>Master token</dt>
+              <dd id="masterTokenValue">--</dd>
+            </div>
+          </dl>
+        </article>
+
+        <article class="panel context-card">
+          <div class="context-heading">
+            <h2>Network readout</h2>
+            <span class="context-note">Static JSON export</span>
+          </div>
+          <dl class="data-list">
+            <div>
+              <dt>Chain ID</dt>
+              <dd id="chainIdValue">--</dd>
+            </div>
+            <div>
+              <dt>Latest block</dt>
+              <dd id="blockNumberValue">--</dd>
+            </div>
+            <div>
+              <dt>Last updated</dt>
+              <dd id="lastUpdatedValue">--</dd>
+            </div>
+            <div>
+              <dt>Queued tokenIds</dt>
+              <dd id="queuedTokenIdsValue">--</dd>
+            </div>
+            <div>
+              <dt>Unique holders</dt>
+              <dd id="uniqueHolderCountValue">--</dd>
+            </div>
+            <div>
+              <dt>Data bundle</dt>
+              <dd id="dbPathValue">--</dd>
+            </div>
+            <div>
+              <dt>Upstream RPC</dt>
+              <dd><a href="https://rpc.katanarpc.com" target="_blank" rel="noreferrer">rpc.katanarpc.com</a></dd>
+            </div>
+          </dl>
+        </article>
+      </section>
+
+      <section class="panel chart-section">
+        <div class="section-heading">
+          <h2>Position History</h2>
+          <p>History is exported into static JSON during the build step and served directly from the site bundle.</p>
+        </div>
+
+        <div class="chart-grid chart-grid-wide">
+          <article class="chart-card">
+            <div class="chart-card-header">
+              <div>
+                <p class="chart-kicker">Overlaid KAT positions</p>
+                <div class="chart-title-row">
+                  <h3>KAT position overlay</h3>
+                  <button
+                    class="tooltip-trigger"
+                    type="button"
+                    data-tooltip="Compares the three KAT-denominated position series over time. Use the toggle chips to turn each line on or off."
+                    aria-label="Explain KAT position overlay chart"
+                  >
+                    ?
+                  </button>
+                </div>
+              </div>
+              <p class="chart-current" id="katOverviewSummary">--</p>
+            </div>
+            <div class="chart-toggle-group" id="katOverviewLegend" aria-label="Toggle KAT series"></div>
+            <div class="chart-shell" id="katOverviewChart"></div>
+          </article>
+
+          <article class="chart-card">
+            <div class="chart-card-header">
+              <div>
+                <p class="chart-kicker">ERC4626 shares</p>
+                <div class="chart-title-row">
+                  <h3>Total avKAT</h3>
+                  <button
+                    class="tooltip-trigger"
+                    type="button"
+                    data-tooltip="Historical snapshots of AvKATVault.totalSupply(), showing total avKAT shares outstanding over time."
+                    aria-label="Explain total avKAT chart"
+                  >
+                    ?
+                  </button>
+                </div>
+              </div>
+              <p class="chart-current" id="avKatSupplyChartValue">--</p>
+            </div>
+            <div class="chart-shell" id="avKatSupplyChart"></div>
+          </article>
+        </div>
+      </section>
+
+      <section class="panel chart-section">
+        <div class="section-heading">
+          <h2>Flow History</h2>
+          <p>Cumulative event counts are exported from the cached chain index and bundled with the static site.</p>
+        </div>
+
+        <div class="chart-grid">
+          <article class="chart-card">
+            <div class="chart-card-header">
+              <div>
+                <p class="chart-kicker">Escrow deposit logs</p>
+                <div class="chart-title-row">
+                  <h3>vKAT create locks</h3>
+                  <button
+                    class="tooltip-trigger"
+                    type="button"
+                    data-tooltip="Cumulative count of VotingEscrow Deposit events, used here as the number of create-lock actions observed on Katana."
+                    aria-label="Explain vKAT create locks chart"
+                  >
+                    ?
+                  </button>
+                </div>
+              </div>
+              <p class="chart-current" id="vkatCreateCountChartValue">--</p>
+            </div>
+            <div class="chart-shell" id="vkatCreateCountChart"></div>
+          </article>
+
+          <article class="chart-card">
+            <div class="chart-card-header">
+              <div>
+                <p class="chart-kicker">Vault deposit logs</p>
+                <div class="chart-title-row">
+                  <h3>avKAT deposits</h3>
+                  <button
+                    class="tooltip-trigger"
+                    type="button"
+                    data-tooltip="Cumulative count of AvKATVault Deposit events, representing ERC4626 deposit actions into the avKAT vault."
+                    aria-label="Explain avKAT deposits chart"
+                  >
+                    ?
+                  </button>
+                </div>
+              </div>
+              <p class="chart-current" id="avkatDepositCountChartValue">--</p>
+            </div>
+            <div class="chart-shell" id="avkatDepositCountChart"></div>
+          </article>
+
+          <article class="chart-card">
+            <div class="chart-card-header">
+              <div>
+                <p class="chart-kicker">Current queued balance</p>
+                <div class="chart-title-row">
+                  <h3>vKAT exit queue</h3>
+                  <button
+                    class="tooltip-trigger"
+                    type="button"
+                    data-tooltip="Historical snapshots of VotingEscrow.currentExitingAmount(), showing how much KAT is currently sitting in the exit queue."
+                    aria-label="Explain exit queue chart"
+                  >
+                    ?
+                  </button>
+                </div>
+              </div>
+              <p class="chart-current" id="exitQueueChartValue">--</p>
+            </div>
+            <div class="chart-shell" id="exitQueueChart"></div>
+          </article>
+        </div>
+      </section>
+
+      <section class="contracts-grid">
+        <article class="panel contracts-panel">
+          <div class="section-heading">
+            <h2>Tracked contracts</h2>
+            <p>Contract links are pinned to Katana mainnet explorers for launch operations.</p>
+          </div>
+          <div class="contract-list">
+            <div class="contract-row">
+              <span class="contract-label">Voting Escrow</span>
+              <a
+                id="votingEscrowLink"
+                href="https://katanascan.com/address/0x4d6fC15Ca6258b168225D283262743C623c13Ead"
+                target="_blank"
+                rel="noreferrer"
+              >
+                0x4d6f...3Ead
+              </a>
+            </div>
+            <div class="contract-row">
+              <span class="contract-label">NFT Lock</span>
+              <a
+                id="lockNftLink"
+                href="https://katanascan.com/address/0x106F7D67Ea25Cb9eFf5064CF604ebf6259Ff296d"
+                target="_blank"
+                rel="noreferrer"
+              >
+                0x106F...296d
+              </a>
+            </div>
+            <div class="contract-row">
+              <span class="contract-label">AvKAT Vault</span>
+              <a
+                id="vaultLink"
+                href="https://katanascan.com/address/0x7231dbaCdFc968E07656D12389AB20De82FbfCeB"
+                target="_blank"
+                rel="noreferrer"
+              >
+                0x7231...fCeB
+              </a>
+            </div>
+            <div class="contract-row">
+              <span class="contract-label">Compound Strategy</span>
+              <a id="strategyLink" href="#" target="_blank" rel="noreferrer">Loading...</a>
+            </div>
+            <div class="contract-row">
+              <span class="contract-label">KAT token</span>
+              <a id="katTokenLink" href="#" target="_blank" rel="noreferrer">Loading...</a>
+            </div>
+          </div>
+        </article>
+
+        <article class="panel methodology-panel">
+          <div class="section-heading">
+            <h2>Metric definitions</h2>
+            <p>The cards map directly to contract state, exported to JSON ahead of deploy for static hosting.</p>
+          </div>
+          <ul class="methodology-list">
+            <li><strong>Total KAT in escrow</strong> reads <code>VotingEscrow.totalLocked()</code>.</li>
+            <li><strong>Active vKAT NFTs</strong> reads <code>Lock.totalSupply()</code>.</li>
+            <li><strong>avKAT minted</strong> reads <code>AvKATVault.totalSupply()</code>.</li>
+            <li><strong>Vault-backed KAT</strong> reads <code>AvKATVault.totalAssets()</code>.</li>
+            <li><strong>Queued tokenIds</strong> counts active lock NFTs currently held by VotingEscrow while waiting in the exit queue.</li>
+            <li><strong>Unique holders</strong> counts current holder addresses, attributing queued positions back to their queue ticket holder.</li>
+          </ul>
+          <p class="footnote" id="integrityNote">
+            Integrity check pending: validating the escrow's reported lock NFT against the expected
+            mainnet lock address.
+          </p>
+        </article>
+      </section>
+    </div>
+
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>
