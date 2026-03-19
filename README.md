@@ -64,9 +64,20 @@ python3 -m http.server 8787
 
 Then open `http://127.0.0.1:8787`.
 
+## Vercel
+
+Deploy the repository root on Vercel, not the `static/` directory.
+
+- `vercel.json` runs `python3 build_static.py --refresh` during the build.
+- Vercel then serves the generated `static/` directory as the deployment output.
+- `/data/dashboard.json` is served with `Cache-Control: no-store, max-age=0` so the browser and CDN revalidate the exported bundle.
+
+This keeps the static deployment fresh on every new deployment, but it is still a static site. If you want the public Vercel site to refresh without a code push, you need a scheduled redeploy trigger such as a Vercel Deploy Hook, Vercel Cron-backed redeploy function, or CI job.
+
 ## Notes
 
-- No build step and no third-party dependencies.
+- No third-party dependencies.
+- Local previews can be served directly; Vercel production builds run `python3 build_static.py --refresh`.
 - Refresh interval is 15 seconds.
 - RPC endpoint: `https://rpc.katanarpc.com`
 - SQLite database path: `data/katana_stats.db`

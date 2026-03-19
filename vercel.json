@@ -1,4 +1,7 @@
 {
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "buildCommand": "python3 build_static.py --refresh",
+  "outputDirectory": "static",
   "headers": [
     {
       "source": "/data/dashboard.json",
